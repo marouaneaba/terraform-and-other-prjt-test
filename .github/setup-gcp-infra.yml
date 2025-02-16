@@ -1,0 +1,59 @@
+name: 'Create GCP Infrastructure (/Terraform)'
+
+on:
+  push:
+    paths:
+      - 'terraform/**'
+    branches: [ "main" ]
+  pull_request:
+    paths:
+      - 'terraform/**'
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  terraform_backend:
+    uses: ./.github/workflows/create-terraform-backend.yml
+    secrets: inherit
+  terraform_gcp:
+    name: 'Terraform_gcp'
+    runs-on: ubuntu-latest
+    environment: production
+    needs: [terraform_backend]
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        working-directory: ./terraform
+        shell: bash
+
+    steps:
+      # Checkout the repository to the GitHub Actions runner
+      - name: Checkout
+        uses: actions/checkout@v3
+
+
+      # Install the latest version of Terraform CLI and configure GCP credentials
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+
+      - name: Configure GCP credentials
+        run: terraform init
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+
+
+      # Generates an execution plan for Terraform
+      - name: Terraform Plan
+        run: terraform plan -input=false
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+
+        # On push to "main", build or change infrastructure according to Terraform configuration files
+        # Note: It is recommended to set up a required "strict" status check in your repository for "Terraform Cloud". See the documentation on "strict" required status checks for more information: https://help.github.com/en/github/administering-a-repository/types-of-required-status-checks
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
